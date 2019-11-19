@@ -1,4 +1,5 @@
 #include <AES.h>
+#include <random>
 
 AES::AES(unsigned char key[16], Mode mode) : mode(mode) {
   CreateRoundConstant();
@@ -7,16 +8,41 @@ AES::AES(unsigned char key[16], Mode mode) : mode(mode) {
 }
 
 void AES::Encrypt(std::ifstream& in, std::ofstream& out) {
-  unsigned char input[BLOCK_SIZE] = {};
-  unsigned char output[BLOCK_SIZE] = {};
+  in.seekg(0, in.end);
+  size_t length = in.tellg();
+  if (length % BLOCK_SIZE != 0) {
+    length = (length / BLOCK_SIZE + 1) * BLOCK_SIZE;
+  }
+  in.seekg(0, in.beg);
+
+  unsigned char* input = new unsigned char[length];
+  in.read((char*)input, length);
+  unsigned char* output = new unsigned char[length];
+  std::ofstream IV_output;
+
   switch (mode) {
     case ECB:
-      while (in.good()) {
-        in.read((char*)input, BLOCK_SIZE);
-        size_t len=in.gcount();
-        Cipher(input, output);
-        out.write((char*)output, len);
+      for (size_t i = 0; i < length; i += BLOCK_SIZE) {
+        Cipher(input + i, output + i);
       }
+      out.write((char*)output, length);
+      break;
+    case CBC:
+      IV_output.open("init_vec", std::ios::binary);
+      unsigned char IV[BLOCK_SIZE];
+      CreateInitialVector(IV);
+      IV_output.write((char*)IV, BLOCK_SIZE);
+      IV_output.close();
+      for (size_t i = 0; i < length; i += BLOCK_SIZE) {
+        for (size_t j = 0; j < BLOCK_SIZE; j++) {
+          input[i + j] ^= IV[j];
+        }
+        Cipher(input + i, output + i);
+        for (size_t j = 0; j < BLOCK_SIZE; j++) {
+          IV[j] = output[i + j];
+        }
+      }
+      out.write((char*)output, length);
       break;
     default:
       break;
@@ -24,16 +50,38 @@ void AES::Encrypt(std::ifstream& in, std::ofstream& out) {
 }
 
 void AES::Decrypt(std::ifstream& in, std::ofstream& out) {
-  unsigned char input[BLOCK_SIZE] = {};
-  unsigned char output[BLOCK_SIZE] = {};
+  in.seekg(0, in.end);
+  size_t length = in.tellg();
+  if (length % BLOCK_SIZE != 0) {
+    length = (length / BLOCK_SIZE + 1) * BLOCK_SIZE;
+  }
+  in.seekg(0, in.beg);
+
+  unsigned char* input = new unsigned char[length];
+  in.read((char*)input, length);
+  unsigned char* output = new unsigned char[length];
+  std::ifstream IV_input;
+
   switch (mode) {
     case ECB:
-      while (in.good()) {
-        in.read((char*)input, BLOCK_SIZE);
-        size_t len=in.gcount();
-        InvCipher(input, output);
-        out.write((char*)output, len);
+      for (size_t i = 0; i < length; i += BLOCK_SIZE) {
+        InvCipher(input + i, output + i);
       }
+      out.write((char*)output, length);
+      break;
+    case CBC:
+      IV_input.open("init_vec", std::ios::binary);
+      unsigned char IV[BLOCK_SIZE];
+      IV_input.read((char*)IV, BLOCK_SIZE);
+      IV_input.close();
+      for (size_t i = 0; i < length; i += BLOCK_SIZE) {
+        InvCipher(input + i, output + i);
+        for (size_t j = 0; j < BLOCK_SIZE; j++) {
+          output[i + j] ^= IV[j];
+          IV[j] = input[i + j];
+        }
+      }
+      out.write((char*)output, length);
       break;
     default:
       break;
@@ -100,6 +148,15 @@ void AES::CreateSBox() {
     ret ^= XOR;
     SBox[(i >> 4)][(i & 0x0F)] = ret;
     InvSBox[(ret >> 4)][(ret & 0x0F)] = i;
+  }
+}
+
+void AES::CreateInitialVector(unsigned char IV[BLOCK_SIZE]) {
+  std::random_device rd;
+  std::mt19937 rng(rd());
+  std::uniform_int_distribution<> dist(0, 1);
+  for (int i = 0; i < BLOCK_SIZE; i++) {
+    IV[i] = dist(rng);
   }
 }
 

@@ -2,20 +2,23 @@
 AES 암호화, 복호화 툴
 
 ## TODO
-- [ ] 시작 인수 처리
+- [x] 시작 인수 처리
 - [x] Galois Field 구현
 - [x] AES 기본 연산 구현
 - [ ] AES Mode of Operation 구현
-  - [ ] ECB
-  - [ ] CBC
+  - [x] ECB
+  - [x] CBC
   - [ ] CFB
   - [ ] OFB
   - [ ] CTR
+- [ ] Padding 처리
+
+## 사용법
 
 ## 기능
-  1. 5개의 Mode of Operation 지원  
-    1. ECB  
-    2. CBC  
-    3. CFB  
-    4. OFB  
-    5. CTR  
+  ### 1. 5개의 Mode of Operation 지원  
+  #### i. ECB
+  #### ii. CBC
+  #### iii. CFB
+  #### iv. OFB
+  #### v. CTR

@@ -29,10 +29,10 @@ class AES {
   void InvCipher(unsigned char* in, unsigned char* out);
   void CreateRoundConstant();
   void CreateSBox();
-  void CreateInitialVector();
+  void CreateInitialVector(unsigned char IV[BLOCK_SIZE]);
   void CopyStateToArr(unsigned char* dest, unsigned char src[][4]);
   void CopyArrToState(unsigned char dest[][4], unsigned char* src);
-  void KeyExpansion(unsigned char key[16]);
+  void KeyExpansion(unsigned char key[BLOCK_SIZE]);
   void AddRoundKey(unsigned char state[][4], int round);
   void InvMixColumns(unsigned char state[][4]);
   void InvShiftRows(unsigned char state[][4]);
