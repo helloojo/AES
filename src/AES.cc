@@ -10,8 +10,10 @@ AES::AES(unsigned char key[16], Mode mode) : mode(mode) {
 void AES::Encrypt(std::ifstream& in, std::ofstream& out) {
   in.seekg(0, in.end);
   size_t length = in.tellg();
+  size_t padding_len = 0;
   if (length % BLOCK_SIZE != 0) {
-    length = (length / BLOCK_SIZE + 1) * BLOCK_SIZE;
+    padding_len = (length / BLOCK_SIZE + 1) * BLOCK_SIZE - length;
+    length += padding_len;
   }
   in.seekg(0, in.beg);
 
@@ -35,6 +37,9 @@ void AES::Encrypt(std::ifstream& in, std::ofstream& out) {
       IV_output.close();
       for (size_t i = 0; i < length; i += BLOCK_SIZE) {
         for (size_t j = 0; j < BLOCK_SIZE; j++) {
+          if (i + j == length - 1) {
+            input[i + j] = padding_len;
+          }
           input[i + j] ^= IV[j];
         }
         Cipher(input + i, output + i);
@@ -52,9 +57,6 @@ void AES::Encrypt(std::ifstream& in, std::ofstream& out) {
 void AES::Decrypt(std::ifstream& in, std::ofstream& out) {
   in.seekg(0, in.end);
   size_t length = in.tellg();
-  if (length % BLOCK_SIZE != 0) {
-    length = (length / BLOCK_SIZE + 1) * BLOCK_SIZE;
-  }
   in.seekg(0, in.beg);
 
   unsigned char* input = new unsigned char[length];
@@ -78,6 +80,9 @@ void AES::Decrypt(std::ifstream& in, std::ofstream& out) {
         InvCipher(input + i, output + i);
         for (size_t j = 0; j < BLOCK_SIZE; j++) {
           output[i + j] ^= IV[j];
+          if (i + j == length - 1) {
+            length-=output[i+j];
+          }
           IV[j] = input[i + j];
         }
       }

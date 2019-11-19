@@ -11,7 +11,7 @@ AES 암호화, 복호화 툴
   - [ ] CFB
   - [ ] OFB
   - [ ] CTR
-- [ ] Padding 처리
+- [x] Padding 처리
 
 ## 사용법
 
