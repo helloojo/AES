@@ -26,7 +26,7 @@ $(TARGET_OBJ): $(HEADERS)
 $(TARGET) : $(TARGET_OBJ) $(HEADERS_OBJS)
 	g++ $^ -o $@
 
-all: clean pre-build header $(TARGET)
+all: pre-build header $(TARGET)
 
 clean:
 	rm -rf obj

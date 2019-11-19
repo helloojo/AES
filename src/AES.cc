@@ -1,17 +1,43 @@
 #include <AES.h>
 
-AES::AES(unsigned char* key) {
+AES::AES(unsigned char key[16], Mode mode) : mode(mode) {
   CreateRoundConstant();
   CreateSBox();
   KeyExpansion(key);
 }
 
-void AES::Encrypt(unsigned char* in, unsigned char* out){
-  Cipher(in,out);
+void AES::Encrypt(std::ifstream& in, std::ofstream& out) {
+  unsigned char input[BLOCK_SIZE] = {};
+  unsigned char output[BLOCK_SIZE] = {};
+  switch (mode) {
+    case ECB:
+      while (in.good()) {
+        in.read((char*)input, BLOCK_SIZE);
+        size_t len=in.gcount();
+        Cipher(input, output);
+        out.write((char*)output, len);
+      }
+      break;
+    default:
+      break;
+  }
 }
 
-void AES::Decrypt(unsigned char* in, unsigned char* out){
-  InvCipher(in,out);
+void AES::Decrypt(std::ifstream& in, std::ofstream& out) {
+  unsigned char input[BLOCK_SIZE] = {};
+  unsigned char output[BLOCK_SIZE] = {};
+  switch (mode) {
+    case ECB:
+      while (in.good()) {
+        in.read((char*)input, BLOCK_SIZE);
+        size_t len=in.gcount();
+        InvCipher(input, output);
+        out.write((char*)output, len);
+      }
+      break;
+    default:
+      break;
+  }
 }
 
 void AES::Cipher(unsigned char* in, unsigned char* out) {
@@ -92,20 +118,20 @@ void AES::CopyArrToState(unsigned char dest[][4], unsigned char* src) {
   }
 }
 
-void AES::KeyExpansion(unsigned char* key) {
+void AES::KeyExpansion(unsigned char key[16]) {
   unsigned int temp;
   int i = 0;
   while (i < Nk) {
-    w[i] = Word(key[(i << 2)], key[(i << 2) + 1], key[(i << 2) + 2],
-                key[(i << 2) + 3]);
+    RoundKey[i] = Word(key[(i << 2)], key[(i << 2) + 1], key[(i << 2) + 2],
+                       key[(i << 2) + 3]);
     i++;
   }
   while (i < Nb * (Nr + 1)) {
-    temp = w[i - 1];
+    temp = RoundKey[i - 1];
     if ((i & 0x03) == 0) {
       temp = SubWord(RotWord(temp)) ^ Rcon[(i >> 2)].number();
     }
-    w[i] = w[i - Nk] ^ temp;
+    RoundKey[i] = RoundKey[i - Nk] ^ temp;
     i++;
   }
 }
@@ -113,7 +139,7 @@ void AES::KeyExpansion(unsigned char* key) {
 void AES::AddRoundKey(unsigned char state[][4], int round) {
   for (int i = 0; i < 4; i++) {
     for (int j = 0; j < 4; j++) {
-      state[i][j] ^= ((w[(round << 2) + j] >> (24 - (i << 3))) & 0xFF);
+      state[i][j] ^= ((RoundKey[(round << 2) + j] >> (24 - (i << 3))) & 0xFF);
     }
   }
 }

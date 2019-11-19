@@ -1,41 +1,38 @@
 #ifndef AES_H
 #define AES_H
 #include <GaloisField.h>
-
+#include <fstream>
+#define BLOCK_SIZE 16
 class AES {
  public:
-  enum Mode { ECB, CBC, CFB, OFB, CTR };
-  AES(unsigned char* key);
-  void Encrypt(unsigned char* in, unsigned char* out);
-  void Decrypt(unsigned char* in, unsigned char* out);
+  enum Mode { ERROR = -1, ECB, CBC, CFB, OFB, CTR };
+  AES(unsigned char key[16], Mode mode);
+  void Encrypt(std::ifstream& in, std::ofstream& out);
+  void Decrypt(std::ifstream& in, std::ofstream& out);
 
  private:
   const GaloisField Matrix[4][4] = {
-		0x02, 0x03, 0x01, 0x01, 
-		0x01, 0x02, 0x03, 0x01,
-		0x01, 0x01, 0x02, 0x03,
-		0x03, 0x01, 0x01, 0x02
-	};  // mixcolumn matrix
+      0x02, 0x03, 0x01, 0x01, 0x01, 0x02, 0x03, 0x01,
+      0x01, 0x01, 0x02, 0x03, 0x03, 0x01, 0x01, 0x02};  // mixcolumn matrix
   const GaloisField InvMatrix[4][4] = {
-		0x0e, 0x0b, 0x0d, 0x09,
-		0x09, 0x0e, 0x0b, 0x0d, 
-		0x0d, 0x09, 0x0e, 0x0b,
-    0x0b, 0x0d, 0x09, 0x0e
-	};	// invmixcolumn matrix
-  GaloisField Rcon[11];
-  unsigned char SBox[16][16];
-  unsigned char InvSBox[16][16];
+      0x0e, 0x0b, 0x0d, 0x09, 0x09, 0x0e, 0x0b, 0x0d,
+      0x0d, 0x09, 0x0e, 0x0b, 0x0b, 0x0d, 0x09, 0x0e};  // invmixcolumn matrix
   const int Nb = 4;
   const int Nk = 4;
   const int Nr = 10;
-  unsigned int w[44];
+  const Mode mode;
+  GaloisField Rcon[11];
+  unsigned char SBox[16][16];
+  unsigned char InvSBox[16][16];
+  unsigned int RoundKey[44];
   void Cipher(unsigned char* in, unsigned char* out);
   void InvCipher(unsigned char* in, unsigned char* out);
   void CreateRoundConstant();
   void CreateSBox();
+  void CreateInitialVector();
   void CopyStateToArr(unsigned char* dest, unsigned char src[][4]);
   void CopyArrToState(unsigned char dest[][4], unsigned char* src);
-  void KeyExpansion(unsigned char* key);
+  void KeyExpansion(unsigned char key[16]);
   void AddRoundKey(unsigned char state[][4], int round);
   void InvMixColumns(unsigned char state[][4]);
   void InvShiftRows(unsigned char state[][4]);
