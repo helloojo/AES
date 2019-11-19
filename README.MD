@@ -8,8 +8,8 @@ AES 암호화, 복호화 툴
 - [ ] AES Mode of Operation 구현
   - [x] ECB
   - [x] CBC
-  - [ ] CFB
-  - [ ] OFB
+  - [x] CFB
+  - [x] OFB
   - [ ] CTR
 - [x] Padding 처리
 

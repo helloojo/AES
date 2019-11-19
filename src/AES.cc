@@ -21,6 +21,7 @@ void AES::Encrypt(std::ifstream& in, std::ofstream& out) {
   in.read((char*)input, length);
   unsigned char* output = new unsigned char[length];
   std::ofstream IV_output;
+  unsigned char IV[BLOCK_SIZE];
 
   switch (mode) {
     case ECB:
@@ -31,7 +32,6 @@ void AES::Encrypt(std::ifstream& in, std::ofstream& out) {
       break;
     case CBC:
       IV_output.open("init_vec", std::ios::binary);
-      unsigned char IV[BLOCK_SIZE];
       CreateInitialVector(IV);
       IV_output.write((char*)IV, BLOCK_SIZE);
       IV_output.close();
@@ -49,6 +49,52 @@ void AES::Encrypt(std::ifstream& in, std::ofstream& out) {
       }
       out.write((char*)output, length);
       break;
+    case CFB:
+      IV_output.open("init_vec", std::ios::binary);
+      CreateInitialVector(IV);
+      IV_output.write((char*)IV, BLOCK_SIZE);
+      IV_output.close();
+      for (size_t i = 0; i < length; i += 4) {
+        Cipher(IV, output + i);
+        for (int j = 0; j < 4; j++) {
+          if (i + j == length - 1) {
+            input[i + j] = padding_len;
+          }
+          output[i + j] ^= input[i + j];
+        }
+        for (int j = 0; j < 12; j++) {
+          IV[j] = IV[j + 4];
+        }
+        for (int j = 12; j < 16; j++) {
+          IV[j] = output[i + 15 - j];
+        }
+      }
+      out.write((char*)output, length);
+      break;
+    case OFB:
+      IV_output.open("init_vec", std::ios::binary);
+      CreateInitialVector(IV);
+      IV_output.write((char*)IV, BLOCK_SIZE);
+      IV_output.close();
+      for (size_t i = 0; i < length; i += 4) {
+        Cipher(IV, output + i);
+        for (int j = 0; j < 12; j++) {
+          IV[j] = IV[j + 4];
+        }
+        for (int j = 12; j < 16; j++) {
+          IV[j] = output[i + 15 - j];
+        }
+        for (int j = 0; j < 4; j++) {
+          if (i + j == length - 1) {
+            input[i + j] = padding_len;
+          }
+          output[i + j] ^= input[i + j];
+        }
+      }
+      out.write((char*)output, length);
+      break;
+    case CTR:
+      break;
     default:
       break;
   }
@@ -63,6 +109,7 @@ void AES::Decrypt(std::ifstream& in, std::ofstream& out) {
   in.read((char*)input, length);
   unsigned char* output = new unsigned char[length];
   std::ifstream IV_input;
+  unsigned char IV[BLOCK_SIZE];
 
   switch (mode) {
     case ECB:
@@ -73,7 +120,6 @@ void AES::Decrypt(std::ifstream& in, std::ofstream& out) {
       break;
     case CBC:
       IV_input.open("init_vec", std::ios::binary);
-      unsigned char IV[BLOCK_SIZE];
       IV_input.read((char*)IV, BLOCK_SIZE);
       IV_input.close();
       for (size_t i = 0; i < length; i += BLOCK_SIZE) {
@@ -81,12 +127,56 @@ void AES::Decrypt(std::ifstream& in, std::ofstream& out) {
         for (size_t j = 0; j < BLOCK_SIZE; j++) {
           output[i + j] ^= IV[j];
           if (i + j == length - 1) {
-            length-=output[i+j];
+            length -= output[i + j];
           }
           IV[j] = input[i + j];
         }
       }
       out.write((char*)output, length);
+      break;
+    case CFB:
+      IV_input.open("init_vec", std::ios::binary);
+      IV_input.read((char*)IV, BLOCK_SIZE);
+      IV_input.close();
+      for (size_t i = 0; i < length; i += 4) {
+        Cipher(IV, output + i);
+        for (int j = 0; j < 4; j++) {
+          output[i + j] ^= input[i + j];
+          if (i + j == length - 1) {
+            length -= output[i + j];
+          }
+        }
+        for (int j = 0; j < 12; j++) {
+          IV[j] = IV[j + 4];
+        }
+        for (int j = 12; j < 16; j++) {
+          IV[j] = input[i + 15 - j];
+        }
+      }
+      out.write((char*)output, length);
+      break;
+    case OFB:
+      IV_input.open("init_vec", std::ios::binary);
+      IV_input.read((char*)IV, BLOCK_SIZE);
+      IV_input.close();
+      for (size_t i = 0; i < length; i += 4) {
+        Cipher(IV, output + i);
+        for (int j = 0; j < 12; j++) {
+          IV[j] = IV[j + 4];
+        }
+        for (int j = 12; j < 16; j++) {
+          IV[j] = output[i + 15 - j];
+        }
+        for (int j = 0; j < 4; j++) {
+          output[i + j] ^= input[i + j];
+          if (i + j == length - 1) {
+            length -= output[i + j];
+          }
+        }
+      }
+      out.write((char*)output, length);
+      break;
+    case CTR:
       break;
     default:
       break;
@@ -159,7 +249,7 @@ void AES::CreateSBox() {
 void AES::CreateInitialVector(unsigned char IV[BLOCK_SIZE]) {
   std::random_device rd;
   std::mt19937 rng(rd());
-  std::uniform_int_distribution<> dist(0, 1);
+  std::uniform_int_distribution<> dist(0, 255);
   for (int i = 0; i < BLOCK_SIZE; i++) {
     IV[i] = dist(rng);
   }
