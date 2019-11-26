@@ -10,11 +10,8 @@ AES::AES(unsigned char key[16], Mode mode) : mode(mode) {
 void AES::Encrypt(std::ifstream& in, std::ofstream& out) {
   in.seekg(0, in.end);
   size_t length = in.tellg();
-  size_t padding_len = 0;
-  if (length % BLOCK_SIZE != 0) {
-    padding_len = (length / BLOCK_SIZE + 1) * BLOCK_SIZE - length;
-    length += padding_len;
-  }
+  size_t padding_len = (length / BLOCK_SIZE + 1) * BLOCK_SIZE - length;
+  length += padding_len;
   in.seekg(0, in.beg);
 
   unsigned char* input = new unsigned char[length];
@@ -22,10 +19,15 @@ void AES::Encrypt(std::ifstream& in, std::ofstream& out) {
   unsigned char* output = new unsigned char[length];
   std::ofstream IV_output;
   unsigned char IV[BLOCK_SIZE];
+  int blockIdx = 0;
+  int blockCnt = 0;
 
   switch (mode) {
     case ECB:
       for (size_t i = 0; i < length; i += BLOCK_SIZE) {
+        if (i == length - BLOCK_SIZE) {
+          input[length - 1] = padding_len;
+        }
         Cipher(input + i, output + i);
       }
       out.write((char*)output, length);
@@ -94,10 +96,32 @@ void AES::Encrypt(std::ifstream& in, std::ofstream& out) {
       out.write((char*)output, length);
       break;
     case CTR:
+      IV_output.open("init_vec", std::ios::binary);
+      CreateInitialVector(IV);
+      IV_output.write((char*)IV, BLOCK_SIZE);
+      IV_output.close();
+      for (size_t i = 0; i < length; i += BLOCK_SIZE) {
+        Cipher(IV, output + i);
+        for (int j = 0; j < BLOCK_SIZE; j++) {
+          if (i + j == length - 1) {
+            input[i + j] = padding_len;
+          }
+          output[i + j] ^= input[i + j];
+        }
+        IV[blockIdx]++;
+        blockCnt++;
+        if (blockCnt == 256) {
+          blockCnt = 0;
+          blockIdx = (blockIdx + 1) % BLOCK_SIZE;
+        }
+      }
+      out.write((char*)output, length);
       break;
     default:
       break;
   }
+  delete[] input;
+  delete[] output;
 }
 
 void AES::Decrypt(std::ifstream& in, std::ofstream& out) {
@@ -110,11 +134,16 @@ void AES::Decrypt(std::ifstream& in, std::ofstream& out) {
   unsigned char* output = new unsigned char[length];
   std::ifstream IV_input;
   unsigned char IV[BLOCK_SIZE];
+  int blockIdx = 0;
+  int blockCnt = 0;
 
   switch (mode) {
     case ECB:
       for (size_t i = 0; i < length; i += BLOCK_SIZE) {
         InvCipher(input + i, output + i);
+        if (i == length - BLOCK_SIZE) {
+          length -= output[length - 1];
+        }
       }
       out.write((char*)output, length);
       break;
@@ -177,10 +206,31 @@ void AES::Decrypt(std::ifstream& in, std::ofstream& out) {
       out.write((char*)output, length);
       break;
     case CTR:
+      IV_input.open("init_vec", std::ios::binary);
+      IV_input.read((char*)IV, BLOCK_SIZE);
+      IV_input.close();
+      for (size_t i = 0; i < length; i += BLOCK_SIZE) {
+        Cipher(IV, output + i);
+        for (int j = 0; j < BLOCK_SIZE; j++) {
+          output[i + j] ^= input[i + j];
+          if (i + j == length - 1) {
+            length -= output[i + j];
+          }
+        }
+        IV[blockIdx]++;
+        blockCnt++;
+        if (blockCnt == 256) {
+          blockCnt = 0;
+          blockIdx = (blockIdx + 1) % BLOCK_SIZE;
+        }
+      }
+      out.write((char*)output, length);
       break;
     default:
       break;
   }
+  delete[] input;
+  delete[] output;
 }
 
 void AES::Cipher(unsigned char* in, unsigned char* out) {
@@ -262,6 +312,7 @@ void AES::CopyStateToArr(unsigned char* dest, unsigned char src[][4]) {
     }
   }
 }
+
 void AES::CopyArrToState(unsigned char dest[][4], unsigned char* src) {
   for (int i = 0; i < 4; i++) {
     for (int j = 0; j < 4; j++) {
@@ -271,7 +322,6 @@ void AES::CopyArrToState(unsigned char dest[][4], unsigned char* src) {
 }
 
 void AES::KeyExpansion(unsigned char key[16]) {
-  unsigned int temp;
   int i = 0;
   while (i < Nk) {
     RoundKey[i] = Word(key[(i << 2)], key[(i << 2) + 1], key[(i << 2) + 2],
@@ -279,9 +329,9 @@ void AES::KeyExpansion(unsigned char key[16]) {
     i++;
   }
   while (i < Nb * (Nr + 1)) {
-    temp = RoundKey[i - 1];
-    if ((i & 0x03) == 0) {
-      temp = SubWord(RotWord(temp)) ^ Rcon[(i >> 2)].number();
+    unsigned int temp = RoundKey[i - 1];
+    if (i % Nk == 0) {
+      temp = SubWord(RotWord(temp)) ^ (Rcon[(i >> 2) - 1].number() << 24);
     }
     RoundKey[i] = RoundKey[i - Nk] ^ temp;
     i++;
@@ -313,12 +363,14 @@ void AES::InvMixColumns(unsigned char state[][4]) {
 }
 
 void AES::InvShiftRows(unsigned char state[][4]) {
-  for (int i = 0; i < 4; i++) {
-    unsigned char temp = state[i][3];
-    for (int j = 3; j > 0; j--) {
-      state[i][j] = state[i][j - 1];
+  for (int row = 0; row < 4; row++) {
+    for (int i = 0; i < row; i++) {
+      unsigned char temp = state[row][3];
+      for (int j = 3; j > 0; j--) {
+        state[row][j] = state[row][j - 1];
+      }
+      state[row][0] = temp;
     }
-    state[i][0] = temp;
   }
 }
 
@@ -351,12 +403,14 @@ unsigned int AES::RotWord(unsigned int word) {
 }
 
 void AES::ShiftRows(unsigned char state[][4]) {
-  for (int i = 0; i < 4; i++) {
-    unsigned char temp = state[i][0];
-    for (int j = 0; j < 3; j++) {
-      state[i][j] = state[i][j + 1];
+  for (int row = 0; row < 4; row++) {
+    for (int i = 0; i < row; i++) {
+      unsigned char temp = state[row][0];
+      for (int j = 0; j < 3; j++) {
+        state[row][j] = state[row][j + 1];
+      }
+      state[row][3] = temp;
     }
-    state[i][3] = temp;
   }
 }
 
@@ -369,12 +423,13 @@ void AES::SubBytes(unsigned char state[][4]) {
 }
 
 unsigned int AES::SubWord(unsigned int word) {
-  unsigned char temp[4];
+  unsigned int result = 0;
   for (int i = 0; i < 4; i++) {
-    temp[i] = ((word >> (24 - (i << 3))) & 0xFF);
-    temp[i] = SBox[temp[i] >> 4][temp[i] & 0x0F];
+    unsigned int temp = ((word >> (24 - (i << 3))) & 0xFF);
+    temp = SBox[temp >> 4][temp & 0x0F];
+    result |= (temp << (24 - (i << 3)));
   }
-  return Word(temp[0], temp[1], temp[2], temp[3]);
+  return result;
 }
 
 unsigned int AES::Word(unsigned int k1, unsigned int k2, unsigned int k3,
